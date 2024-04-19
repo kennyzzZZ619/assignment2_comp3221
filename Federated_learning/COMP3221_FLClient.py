@@ -5,8 +5,9 @@ import os
 
 import pandas as pd
 import torch
+from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-import torch.nn as nn
+
 from LinearRegression import LinearRegressionModel
 
 
@@ -34,9 +35,9 @@ class FLClient:
         self.client_port = client_port
         self.opt_method = opt_method
         self.model = LinearRegressionModel()
+        self.loss = nn.MSELoss()
         # self.model = copy.deepcopy(model)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.025)
-
 
         self.X_train, self.y_train, self.X_test, self.y_test, self.train_samples, self.test_samples = load_dataset(
             self.client_id)
@@ -57,14 +58,30 @@ class FLClient:
         self.train_loader = DataLoader(train_dataset, batch_size=batch_size)
         self.test_loader = DataLoader(test_dataset, batch_size=self.test_samples)
 
+    # def register_from_server(self):
+    #     handshake_msg = {
+    #         'data_size': len(self.X_train),
+    #         'client_id': self.client_id
+    #     }
+    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as Client_c:
+    #         Client_c.connect(('localhost', 6000))
+    #         Client_c.sendall(pickle.dumps(handshake_msg))
     def register_from_server(self):
-        handshake_msg = {
-            'data_size': len(self.X_train),
-            'client_id': self.client_id
-        }
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as Client_c:
-            Client_c.connect(('localhost', 6000))
-            Client_c.sendall(pickle.dumps(handshake_msg))
+        handshake_msg = {'data_size': len(self.X_train), 'client_id': self.client_id}
+        attempt = 0
+        while attempt < 3:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as Client_c:
+                    Client_c.settimeout(10)
+                    Client_c.connect(('localhost', 6000))
+                    Client_c.sendall(pickle.dumps(handshake_msg))
+                    break
+            except (ConnectionRefusedError, socket.timeout) as e:
+                attempt += 1
+                print(f"Attempt {attempt}: Connection failed, retrying...")
+                if attempt == 3:
+                    print(f"Connection failed after 3 attempts. error is:{e}")
+                    sys.exit(1)
 
     def handle_model(self):
         # receive the global model from server
@@ -80,7 +97,7 @@ class FLClient:
             print(f"Testing MSE: {test_mse}")
             # Training the global model in local training
             print("Local training...")
-            train_mse = self.train_model()
+            train_mse = self.train_model(20)
             print(f"Training MSE: {train_mse}")
             # Send the model to server
             model_datapack = {
@@ -99,11 +116,11 @@ class FLClient:
             y_pred = self.model(x)
             # Calculate evaluation metrics
             mse += nn.MSELoss(y_pred, y)
-            #print(str(self.id) + ", MSE of client ",self.id, " is: ", mse)
+            # print(str(self.id) + ", MSE of client ",self.id, " is: ", mse)
 
         return mse
 
-    def train_model(self,epochs):
+    def train_model(self, epochs):
         # ... Training model，return train MSE ...
         loss = 0
         self.model.train()
@@ -136,3 +153,4 @@ if __name__ == "__main__":
     client.register_from_server()
     while True:
         client.handle_model()
+

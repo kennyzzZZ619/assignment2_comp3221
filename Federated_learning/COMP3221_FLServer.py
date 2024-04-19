@@ -1,4 +1,3 @@
-import json
 import pickle
 import socket
 import threading
@@ -59,11 +58,12 @@ class FLServer:
             client_thread.start()
 
             # Check if the initial wait time has passed
-            if connected_clients == 1:
-                time_remaining = self.wait_time - (time.time() - start_time)
-                if time_remaining > 0:
-                    print(f"Waiting for additional clients to connect for {time_remaining} seconds.")
-                    time.sleep(time_remaining)
+            if t == 0:
+                if connected_clients == 1:
+                    time_remaining = self.wait_time - (time.time() - start_time)
+                    if time_remaining > 0:
+                        print(f"Waiting for additional clients to connect for {time_remaining} seconds.")
+                        time.sleep(time_remaining)
 
     def handle_handshake(self, conn, addr, t):
         if t == 0:
@@ -124,12 +124,12 @@ class FLServer:
 
     def broadcast_model(self):
         print("Broadcasting new global model")
-        send_model = json.dumps(self.global_model)
+        send_model = pickle.dumps(self.global_model)
         for client_port in range(6001, 6005, 1):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as SERVER:
                 try:
                     SERVER.connect(('localhost', client_port))
-                    SERVER.sendall(send_model.encode('utf-8'))
+                    SERVER.sendall(send_model)
                 except Exception as e:
                     print(f"Can not connect to the client {client_port}, error is {e}")
         print("sender stop")
