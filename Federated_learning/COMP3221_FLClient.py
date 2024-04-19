@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from Federated_learning.LinearRegression import LinearRegressionModel
+from LinearRegression import LinearRegressionModel
 
 
 def load_dataset(client_id):
@@ -29,12 +29,12 @@ def load_dataset(client_id):
 
 
 class FLClient:
-    def __init__(self, client_id, server_port, opt_method):
+    def __init__(self, client_id, client_port, opt_method):
         self.client_id = client_id
-        self.server_port = server_port
+        self.client_port = client_port
         self.opt_method = opt_method
         self.model = LinearRegressionModel()
-        #self.model = copy.deepcopy(model)
+        # self.model = copy.deepcopy(model)
 
         self.X_train, self.y_train, self.X_test, self.y_test, self.train_samples, self.test_samples = load_dataset(
             self.client_id)
@@ -61,8 +61,42 @@ class FLClient:
             'client_id': self.client_id
         }
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as Client_c:
-            Client_c.connect(('localhost', self.server_port))
+            Client_c.connect(('localhost', 6000))
             Client_c.sendall(pickle.dumps(handshake_msg))
+
+    def handle_model(self):
+        # receive the global model from server
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect(('localhost', 6000))
+            global_model_data = s.recv(2048)
+            global_model = pickle.loads(global_model_data)
+            self.model.load_state_dict(global_model)
+            print(f"I am client {self.client_id}")
+            print("Received new global model")
+            # Evaluate the global model using local test data
+            test_mse = self.evaluate_model()
+            print(f"Testing MSE: {test_mse}")
+            # Training the global model in local training
+            print("Local training...")
+            train_mse = self.train_model()
+            print(f"Training MSE: {train_mse}")
+            # Send the model to server
+            updated_model_data = pickle.dumps(self.model.state_dict())
+            s.sendall(updated_model_data)
+            print("Sending new local model")
+
+    def evaluate_model(self):
+        # ... evaluate model，return test MSE ...
+        pass
+
+    def train_model(self):
+        # ... training model，return train MSE ...
+        pass
+
+    def log_results(self, train_mse, test_mse):
+        # The log to record all the MSE detail
+        with open(f"{self.client_id}_log.txt", "a") as log_file:
+            log_file.write(f"Train MSE: {train_mse}, Test MSE: {test_mse}\n")
 
 
 if __name__ == "__main__":
@@ -75,3 +109,7 @@ if __name__ == "__main__":
     opt_method = int(sys.argv[3])
 
     client = FLClient(client_id, server_port, opt_method)
+    client.register_from_server()
+    while True:
+        client.handle_model()
+
