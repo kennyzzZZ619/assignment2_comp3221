@@ -2,7 +2,7 @@ import torch.nn as nn
 
 
 class LinearRegressionModel(nn.Module):
-    def __init__(self, input_size=9):
+    def __init__(self, input_size=8):
         super(LinearRegressionModel, self).__init__()
         # Create a linear transformation to the incoming data
         self.linear = nn.Linear(input_size, 1)

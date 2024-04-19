@@ -88,10 +88,10 @@ class FLServer:
         local_model = data_packet.get('model')
         # local_model = data_packet['model']
         with self.lock:
-            self.lock.acquire()
+            # self.lock.acquire()
             # refresh the model from client
             self.client_models[client_id] = local_model
-            self.lock.release()
+            # self.lock.release()
             # when all the client was sent models
         if len(self.client_models) == self.num_clients:
             # Aggregate the model
