@@ -4,7 +4,8 @@ import sys
 import os
 
 import pandas as pd
-from torch.utils.data import DataLoader
+import torch
+from torch.utils.data import DataLoader, TensorDataset
 
 from Federated_learning.LinearRegression import LinearRegressionModel
 
@@ -31,19 +32,28 @@ class FLClient:
     def __init__(self, client_id, server_port, opt_method):
         self.client_id = client_id
         self.server_port = server_port
-
+        self.opt_method = opt_method
         self.model = LinearRegressionModel()
+        #self.model = copy.deepcopy(model)
 
         self.X_train, self.y_train, self.X_test, self.y_test, self.train_samples, self.test_samples = load_dataset(
             self.client_id)
 
-        self.train_data = [(x, y) for x, y in zip(self.X_train, self.y_train)]
-        self.test_data = [(x, y) for x, y in zip(self.X_test, self.y_test)]
+        # self.train_data = [(x, y) for x, y in zip(self.X_train, self.y_train)]
+        # self.test_data = [(x, y) for x, y in zip(self.X_test, self.y_test)]
+        X_train_tensor = torch.tensor(self.X_train, dtype=torch.float32)
+        y_train_tensor = torch.tensor(self.y_train, dtype=torch.float32)
+        X_test_tensor = torch.tensor(self.X_test, dtype=torch.float32)
+        y_test_tensor = torch.tensor(self.y_test, dtype=torch.float32)
 
-        batch_size = self.train_samples if opt_method == 0 else 64
+        # Create TensorDataset objects
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
 
-        self.train_loader = DataLoader(self.train_data, batch_size=batch_size)
-        self.test_loader = DataLoader(self.test_data, batch_size=self.test_samples)
+        batch_size = self.train_samples if self.opt_method == 0 else 64
+
+        self.train_loader = DataLoader(train_dataset, batch_size=batch_size)
+        self.test_loader = DataLoader(test_dataset, batch_size=self.test_samples)
 
     def register_from_server(self):
         handshake_msg = {
