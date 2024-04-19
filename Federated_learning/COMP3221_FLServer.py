@@ -33,6 +33,7 @@ class FLServer:
             #     print(param_tensor, "\t", self.global_model.state_dict()[param_tensor])
             # try to do the model fitting and so on
             self.accept_clients(t)
+            time.sleep(10)
             if t == 0:
                 self.broadcast_model()
             # else:
@@ -124,8 +125,8 @@ class FLServer:
 
     def broadcast_model(self):
         print("Broadcasting new global model")
-        send_model = pickle.dumps(self.global_model)
-        for client_port in range(6001, 6005, 1):
+        send_model = pickle.dumps(self.global_model.state_dict())
+        for client_port in range(6001, 6006, 1):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as SERVER:
                 try:
                     SERVER.connect(('localhost', client_port))
