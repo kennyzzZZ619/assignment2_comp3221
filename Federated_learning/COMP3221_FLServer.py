@@ -54,7 +54,7 @@ class FLServer:
             connected_clients += 1
 
             # Start a new thread to handle the client
-            client_thread = threading.Thread(target=self.handle_handshake, args=(conn, addr, t))
+            client_thread = threading.Thread(target=self.handle_handshake, args=(conn, t))  # addr
             client_thread.start()
 
             # Check if the initial wait time has passed
@@ -65,9 +65,9 @@ class FLServer:
                         print(f"Waiting for additional clients to connect for {time_remaining} seconds.")
                         time.sleep(time_remaining)
 
-    def handle_handshake(self, conn, addr, t):
+    def handle_handshake(self, conn, t):  # addr
         if t == 0:
-            handshake_data = conn.recv(4096)
+            handshake_data = conn.recv(40960)
             if handshake_data:
                 handshake_msg = pickle.loads(handshake_data)
                 client_id = handshake_msg.get('client_id')
@@ -75,7 +75,7 @@ class FLServer:
                 print(f"Handshake received from {client_id} with data size {data_size}.")
                 self.client_data[client_id] = {'train_samples': data_size}
         else:
-            global_model_data = conn.recv(4096)
+            global_model_data = conn.recv(40960)
             if global_model_data:
                 global_model = pickle.loads(global_model_data)
                 self.process_received_data(global_model)

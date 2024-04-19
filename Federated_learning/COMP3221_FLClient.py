@@ -2,6 +2,7 @@ import pickle
 import socket
 import sys
 import os
+import time
 
 import pandas as pd
 import torch
@@ -69,13 +70,13 @@ class FLClient:
     def register_from_server(self):
         handshake_msg = {'data_size': len(self.X_train), 'client_id': self.client_id}
         attempt = 0
-        while attempt < 3:
+        while attempt < 4:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as Client_c:
                     Client_c.settimeout(10)
                     Client_c.connect(('localhost', 6000))
                     Client_c.sendall(pickle.dumps(handshake_msg))
-                    break
+                    break  # why???
             except (ConnectionRefusedError, socket.timeout) as e:
                 attempt += 1
                 print(f"Attempt {attempt}: Connection failed, retrying...")
@@ -83,30 +84,61 @@ class FLClient:
                     print(f"Connection failed after 3 attempts. error is:{e}")
                     sys.exit(1)
 
+
     def handle_model(self):
         # receive the global model from server
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', 6000))
-            global_model_data = s.recv(2048)
-            global_model = pickle.loads(global_model_data)
-            self.model.load_state_dict(global_model)
-            print(f"I am client {self.client_id}")
-            print("Received new global model")
-            # Evaluate the global model using local test data
-            test_mse = self.evaluate_model()
-            print(f"Testing MSE: {test_mse}")
-            # Training the global model in local training
-            print("Local training...")
-            train_mse = self.train_model(20)
-            print(f"Training MSE: {train_mse}")
-            # Send the model to server
-            model_datapack = {
-                'client_id': self.client_id,
-                'model': self.model.state_dict()
-            }
-            updated_model_data = pickle.dumps(model_datapack)
-            s.sendall(updated_model_data)
-            print("Sending new local model")
+            # s.connect(('localhost', 6000))
+            s.bind(('localhost', self.client_port))
+            s.listen()
+            print("Listening for server")
+            while True:
+                conn, addr = s.accept()
+                with conn:
+                    print(f"Connected by {addr}")
+                    global_model_data = s.recv(2048)
+                    global_model = pickle.loads(global_model_data)
+                    self.model.load_state_dict(global_model)
+                    print(f"I am client {self.client_id}")
+                    print("Received new global model")
+                    # Evaluate the global model using local test data
+                    test_mse = self.evaluate_model()
+                    print(f"Testing MSE: {test_mse}")
+                    # Training the global model in local training
+                    print("Local training...")
+                    train_mse = self.train_model(20)
+                    print(f"Training MSE: {train_mse}")
+                    # Send the model to server
+                    model_datapack = {
+                        'client_id': self.client_id,
+                        'model': self.model.state_dict()
+                    }
+                    updated_model_data = pickle.dumps(model_datapack)
+                    s.sendall(updated_model_data)
+                    print("Sending new local model")
+                    if not global_model_data:
+                        print("There is no data to receive.")
+                        break
+            # global_model_data = s.recv(2048)
+            # global_model = pickle.loads(global_model_data)
+            # self.model.load_state_dict(global_model)
+            # print(f"I am client {self.client_id}")
+            # print("Received new global model")
+            # # Evaluate the global model using local test data
+            # test_mse = self.evaluate_model()
+            # print(f"Testing MSE: {test_mse}")
+            # # Training the global model in local training
+            # print("Local training...")
+            # train_mse = self.train_model(20)
+            # print(f"Training MSE: {train_mse}")
+            # # Send the model to server
+            # model_datapack = {
+            #     'client_id': self.client_id,
+            #     'model': self.model.state_dict()
+            # }
+            # updated_model_data = pickle.dumps(model_datapack)
+            # s.sendall(updated_model_data)
+            # print("Sending new local model")
 
     def evaluate_model(self):
         # ... Evaluate model，return test MSE ...
