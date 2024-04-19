@@ -81,16 +81,20 @@ class FLClient:
             train_mse = self.train_model()
             print(f"Training MSE: {train_mse}")
             # Send the model to server
-            updated_model_data = pickle.dumps(self.model.state_dict())
+            model_datapack = {
+                'client_id': self.client_id,
+                'model': self.model.state_dict()
+            }
+            updated_model_data = pickle.dumps(model_datapack)
             s.sendall(updated_model_data)
             print("Sending new local model")
 
     def evaluate_model(self):
-        # ... evaluate model，return test MSE ...
+        # ... Evaluate model，return test MSE ...
         pass
 
     def train_model(self):
-        # ... training model，return train MSE ...
+        # ... Training model，return train MSE ...
         pass
 
     def log_results(self, train_mse, test_mse):
@@ -112,4 +116,3 @@ if __name__ == "__main__":
     client.register_from_server()
     while True:
         client.handle_model()
-

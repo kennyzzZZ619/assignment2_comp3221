@@ -30,12 +30,14 @@ class FLServer:
         # start global communication
         for t in range(self.global_round):
             print(f"Global Iteration {t + 1}:")
+            # for param_tensor in self.global_model.state_dict():
+            #     print(param_tensor, "\t", self.global_model.state_dict()[param_tensor])
             # try to do the model fitting and so on
             self.accept_clients(t)
             if t == 0:
                 self.broadcast_model()
-            else:
-                self.aggregate_models()
+            # else:
+            #     self.aggregate_models()
         # send the ending message
         # self.broadcast_finish_message()
         self.s.close()
@@ -71,7 +73,7 @@ class FLServer:
                 client_id = handshake_msg.get('client_id')
                 data_size = handshake_msg.get('data_size')
                 print(f"Handshake received from {client_id} with data size {data_size}.")
-                self.client_data[client_id] = {'data_size': data_size}
+                self.client_data[client_id] = {'train_samples': data_size}
         else:
             global_model_data = conn.recv(4096)
             if global_model_data:
@@ -80,7 +82,10 @@ class FLServer:
 
     def process_received_data(self, data_packet):  # conn
         # decode the data pack, 'local_model' is form client model
-        client_id, local_model = data_packet['client_id'], data_packet['model']
+        # client_id, local_model = data_packet['client_id'], data_packet['model']
+        client_id = data_packet.get('client_id')
+        local_model = data_packet.get('model')
+        # local_model = data_packet['model']
         with self.lock:
             self.lock.acquire()
             # refresh the model from client
