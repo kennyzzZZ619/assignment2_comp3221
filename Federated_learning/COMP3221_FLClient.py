@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-
+import torch.nn as nn
 from LinearRegression import LinearRegressionModel
 
 
@@ -35,6 +35,8 @@ class FLClient:
         self.opt_method = opt_method
         self.model = LinearRegressionModel()
         # self.model = copy.deepcopy(model)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.025)
+
 
         self.X_train, self.y_train, self.X_test, self.y_test, self.train_samples, self.test_samples = load_dataset(
             self.client_id)
@@ -91,11 +93,29 @@ class FLClient:
 
     def evaluate_model(self):
         # ... Evaluate model，return test MSE ...
-        pass
+        self.model.eval()
+        mse = 0
+        for x, y in self.test_loader:
+            y_pred = self.model(x)
+            # Calculate evaluation metrics
+            mse += nn.MSELoss(y_pred, y)
+            #print(str(self.id) + ", MSE of client ",self.id, " is: ", mse)
 
-    def train_model(self):
+        return mse
+
+    def train_model(self,epochs):
         # ... Training model，return train MSE ...
-        pass
+        loss = 0
+        self.model.train()
+        for epoch in range(1, epochs + 1):
+            self.model.train()
+            for batch_idx, (X, y) in enumerate(self.train_loader):
+                self.optimizer.zero_grad()
+                output = self.model(X)
+                loss = nn.MSELoss(output, y)
+                loss.backward()
+                self.optimizer.step()
+        return loss.data
 
     def log_results(self, train_mse, test_mse):
         # The log to record all the MSE detail
