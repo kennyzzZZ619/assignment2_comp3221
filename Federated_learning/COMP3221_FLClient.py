@@ -3,6 +3,7 @@ import socket
 import sys
 import os
 import time
+import matplotlib.pyplot as plt
 
 import pandas as pd
 import torch
@@ -63,7 +64,10 @@ class FLClient:
 
         self.train_loader = DataLoader(train_dataset, batch_size=batch_size)
         self.test_loader = DataLoader(test_dataset, batch_size=self.test_samples)
-    
+
+        self.train_losses = []
+        self.test_losses = []
+
     def connect_to_server(self):
         self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connection.settimeout(10)
@@ -80,10 +84,15 @@ class FLClient:
         print("Handshake message sent to server.")
 
     def maintain_connection(self):
+        ft = True
         try:
             while True:  # This loop will continue until the server closes the connection or an error occurs
-                print("Waiting 20 seconds for model")
-                time.sleep(20)
+                #print("Waiting 20 seconds for model")
+                if ft:
+                    ft = False
+                    time.sleep(20)
+                else:
+                    time.sleep(10)
                 global_model_data = self.connection.recv(4096)
                 if not global_model_data:
                     print("No more data from server.")
@@ -93,20 +102,14 @@ class FLClient:
                 # for param_tensor in global_model.state_dict():
                 #     print(param_tensor, "\t", global_model.state_dict()[param_tensor])
                 #if isinstance(global_model, dict):
-                    #self.model.load_state_dict(global_model)
+                #self.model.load_state_dict(global_model)
                 #else:
-                    #raise ValueError("Received data is not a state_dict.")
+                #raise ValueError("Received data is not a state_dict.")
                 self.model.load_state_dict(global_model)
-                print("这是第一次训练之前数据")
-                for name, param in self.model.named_parameters():
-                    print(f"Parameter name: {name}")
-                    print(f"Shape: {param.size()}")
-                    print(f"Type: {param.dtype}")
-                    print("Values:\n", param.data)  # 打印参数值
-                print(f"Model in local is {self.model}")
                 print(f"I am client {self.client_id}")
                 print("Received new global model")
                 test_mse = self.evaluate_model()
+
                 print(f"Testing MSE: {test_mse}")
                 # Training the global model in local training
                 print("Local training...")
@@ -115,26 +118,27 @@ class FLClient:
                 self.log_results(train_mse, test_mse)
                 # Logic to update and evaluate the model goes here (omitted for brevity)
                 updated_model_data = pickle.dumps({'client_id': self.numeric_id, 'model': self.model.state_dict()})
-                print("这是第一次训练之后的数据")
-                for name, param in self.model.named_parameters():
-                    print(f"Parameter name: {name}")
-                    print(f"Shape: {param.size()}")
-                    print(f"Type: {param.dtype}")
-                    print("Values:\n", param.data)
+
                 self.connection.sendall(updated_model_data)
                 print("Sending new local model")
+
+                self.train_losses.append(test_mse.detach().numpy())
+                self.test_losses.append(train_mse.detach().numpy())
+                #print("self.trainlosses: {}".format(self.train_losses))
+                #print("self.testlosses: {}".format(self.test_losses))
 
         except Exception as e:
             print(f"Error during model receive/send: {e}")
 
-
     def evaluate_model(self):
         # ... Evaluate model，return test MSE ...
         self.model.eval()
+
         mse = 0
         for x, y in self.test_loader:
             y_pred = self.model(x)
             # Calculate evaluation metrics
+
             mse += self.loss(y_pred, y)
             # print(str(self.id) + ", MSE of client ",self.id, " is: ", mse)
 
@@ -153,10 +157,35 @@ class FLClient:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
+
         return loss.data
 
+    def plot(self):
+        #print("Plotted")
+        count = list(range(len(self.train_losses)))  # Assuming both lists are of the same length
+
+        # Create a plot
+        plt.figure(figsize=(10, 5))
+
+        # Plotting both feature lists using scatter
+        plt.scatter(count, self.train_losses, s=0.5, label='training losses', color='blue', marker='o')
+        plt.scatter(count, self.test_losses, s=0.5, label='testing losses', color='red', marker='o')
+        for i, value in enumerate(self.train_losses):
+            plt.text(count[i], self.train_losses[i], '{0:.2f}'.format(value), color='blue', fontsize='small', ha='right', va='bottom')
+        for i, value in enumerate(self.test_losses):
+            plt.text(count[i], self.test_losses[i], '{0:.2f}'.format(value), color='red', fontsize='small', ha='left', va='top')
+        # Adding titles and labels
+        plt.title('Convergence of losses across training iterations for {}'.format(self.client_id))
+        plt.xlabel('Iterations')
+        plt.ylabel('Losses')
+        plt.legend()
+        plt.savefig('{}.png'.format(self.client_id))
+
+
+        plt.close()
     def close_connection(self):
         if self.connection:
+            self.plot()
             self.connection.close()
             print("Connection closed.")
 

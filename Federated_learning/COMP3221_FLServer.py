@@ -69,13 +69,13 @@ class FLServer:
             try:
                 model_data = conn.recv(40960)
                 if model_data:
-                    print("====handle_models====")
+
                     self.process_received_data(pickle.loads(model_data))
             except socket.error as e:
                 print(f"Error receiving data: {e}")
 
         if len(self.client_models) == self.num_clients:
-            print("====aggregate_models====")
+
             self.global_model = self.aggregate_models()
 
     def process_received_data(self, data_packet):  # conn
@@ -84,7 +84,7 @@ class FLServer:
         local_model = data_packet.get('model')
         with self.lock:
             # self.lock.acquire()
-            print("====process_received_data====")
+
             self.client_models[client_id] = local_model
 
     # def aggregate_models(self):
