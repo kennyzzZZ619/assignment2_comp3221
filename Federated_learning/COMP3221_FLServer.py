@@ -1,4 +1,5 @@
 import pickle
+import random
 import socket
 import threading
 import time
@@ -22,6 +23,7 @@ class FLServer:
         self.wait_time = 30
         self.global_round = 10
         self.connections = []
+        #self.all_connections = []
 
     def start_server(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -65,7 +67,8 @@ class FLServer:
 
     def handle_models(self):
         self.client_models.clear()
-        for conn in self.connections:
+        selected_connections = self.select_random_clients()
+        for conn in selected_connections:
             try:
                 model_data = conn.recv(40960)
                 if model_data:
@@ -78,38 +81,23 @@ class FLServer:
 
             self.global_model = self.aggregate_models()
 
+    def select_random_clients(self):
+        if self.subsample == 0 or self.subsample >= len(self.connections):
+            return self.connections  # 没有子采样，或者子采样数量等于/超过客户端总数
+        else:
+            # 随机选择子采样数量的客户端
+            return random.sample(self.connections, self.subsample)
+
     def process_received_data(self, data_packet):  # conn
         # decode the data pack, 'local_model' is form client model
         client_id = data_packet.get('client_id')
+        print(f"Getting local model from client {client_id}")
         local_model = data_packet.get('model')
         with self.lock:
             # self.lock.acquire()
 
             self.client_models[client_id] = local_model
 
-    # def aggregate_models(self):
-    #     # Initialize a dictionary to store the accumulated weights
-    #     total_weights = {}
-    #
-    #     # Initialize total_weights with zeros
-    #     for key, param in self.global_model.state_dict().items():
-    #         total_weights[key] = torch.zeros_like(param)
-    #
-    #     # Compute the total number of training samples from all clients
-    #     total_train_samples = sum(client_data['train_samples'] for client_data in self.client_data.values())
-    #
-    #     # Sum the weighted parameters of each client's model
-    #     for client_id, model in self.client_models.items():
-    #         client_samples = self.client_data[client_id]['train_samples']
-    #         user_weights = model.state_dict()
-    #         for key, param in user_weights.items():
-    #             weight = param * client_samples / total_train_samples
-    #             total_weights[key] += weight
-    #
-    #     # Load the aggregated weights into the global model
-    #     self.global_model.load_state_dict(total_weights)
-    #
-    #     return self.global_model
     def aggregate_models(self):
         # Initialize a dictionary to store the accumulated weights
         total_weights = {}
