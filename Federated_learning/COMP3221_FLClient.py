@@ -1,4 +1,5 @@
 import pickle
+import random
 import socket
 import sys
 import os
@@ -214,6 +215,7 @@ if __name__ == "__main__":
         client.close_connection()
     elif len(sys.argv) != 4:
         if len(sys.argv) == 5 and sys.argv[4] == 'demo':
+            random.seed(10)
             client_id = str(sys.argv[1])
             server_port = int(sys.argv[2])
             opt_method = int(sys.argv[3])
@@ -226,4 +228,3 @@ if __name__ == "__main__":
         else:
             print("Usage: python COMP3221_FLClient.py <Client-id> <Port-Client> <Opt-Method>")
             sys.exit(1)
-

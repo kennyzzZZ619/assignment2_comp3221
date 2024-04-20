@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 
+
 class LinearRegressionModel(nn.Module):
     def __init__(self, input_size=8, seed=False):
         if seed:
@@ -14,4 +15,3 @@ class LinearRegressionModel(nn.Module):
         # Apply linear transformation
         output = self.linear(x)
         return output.reshape(-1)
-

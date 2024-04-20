@@ -70,25 +70,25 @@ class FLServer:
 
     def handle_models(self):
         self.client_models.clear()
-        selected_connections = self.select_random_clients()
-        for conn in selected_connections:
+        #selected_connections = self.select_random_clients()
+        for conn in self.connections:
             try:
                 model_data = conn.recv(40960)
                 if model_data:
-
                     self.process_received_data(pickle.loads(model_data))
+                    #time.sleep(2)
             except socket.error as e:
                 print(f"Error receiving data: {e}")
-
+        #if self.subsample == len(self.client_models):
+        #    self.global_model = self.aggregate_models()
         if len(self.client_models) == self.num_clients:
-
             self.global_model = self.aggregate_models()
 
     def select_random_clients(self):
         if self.subsample == 0 or self.subsample >= len(self.connections):
-            return self.connections  # 没有子采样，或者子采样数量等于/超过客户端总数
+            return self.connections  
         else:
-            # 随机选择子采样数量的客户端
+
             return random.sample(self.connections, self.subsample)
 
     def process_received_data(self, data_packet):  # conn
@@ -101,6 +101,27 @@ class FLServer:
 
             self.client_models[client_id] = local_model
 
+    # def aggregate_models(self):
+    #     # Initialize a dictionary to store the accumulated weights
+    #     total_weights = {}
+    #
+    #     # Initialize total_weights with zeros
+    #     for key, param in self.global_model.state_dict().items():
+    #         total_weights[key] = torch.zeros_like(param)
+    #
+    #     # Compute the total number of training samples from all clients
+    #     total_train_samples = sum(client_data['train_samples'] for client_data in self.client_data.values())
+    #
+    #     # Sum the weighted parameters of each client's model
+    #     for client_id, user_weights in self.client_models.items():
+    #         client_samples = self.client_data[client_id]['train_samples']
+    #         for key, param in user_weights.items():
+    #             weight = param * client_samples / total_train_samples
+    #             total_weights[key] += weight
+    #
+    #     # Load the aggregated weights into the global model
+    #     self.global_model.load_state_dict(total_weights)
+    #     return self.global_model
     def aggregate_models(self):
         # Initialize a dictionary to store the accumulated weights
         total_weights = {}
@@ -109,11 +130,20 @@ class FLServer:
         for key, param in self.global_model.state_dict().items():
             total_weights[key] = torch.zeros_like(param)
 
-        # Compute the total number of training samples from all clients
-        total_train_samples = sum(client_data['train_samples'] for client_data in self.client_data.values())
+        # Determine the client models to use based on subsampling
+        if 0 < self.subsample < self.num_clients:
+            # If subsampling is enabled, randomly pick a subset of clients
+            selected_client_ids = random.sample(list(self.client_models.keys()), self.subsample)
+            selected_models = {client_id: self.client_models[client_id] for client_id in selected_client_ids}
+        else:
+            # Use all client models if subsampling is not enabled
+            selected_models = self.client_models
 
-        # Sum the weighted parameters of each client's model
-        for client_id, user_weights in self.client_models.items():
+        # Compute the total number of training samples from the selected clients
+        total_train_samples = sum(self.client_data[client_id]['train_samples'] for client_id in selected_models)
+
+        # Sum the weighted parameters of each selected client's model
+        for client_id, user_weights in selected_models.items():
             client_samples = self.client_data[client_id]['train_samples']
             for key, param in user_weights.items():
                 weight = param * client_samples / total_train_samples
@@ -146,6 +176,7 @@ if __name__ == "__main__":
         server.global_iteration()
     elif len(sys.argv) != 3:
         if len(sys.argv) == 4 and sys.argv[3] == 'demo':
+            random.seed(10)
             port = int(sys.argv[1])
             subsample = int(sys.argv[2])
             # We should add a function to check the argument can be use
@@ -155,4 +186,3 @@ if __name__ == "__main__":
         else:
             print("Usage: python COMP3221_FLServer.py <Port-Server> <Sub-Client>")
             sys.exit(1)
-
