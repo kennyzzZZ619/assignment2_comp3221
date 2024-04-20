@@ -91,8 +91,8 @@ class FLClient:
 
                 global_model = pickle.loads(global_model_data)
                 print(type(global_model))
-                for param_tensor in global_model.state_dict():
-                    print(param_tensor, "\t", global_model.state_dict()[param_tensor])
+                # for param_tensor in global_model.state_dict():
+                #     print(param_tensor, "\t", global_model.state_dict()[param_tensor])
                 #if isinstance(global_model, dict):
                     #self.model.load_state_dict(global_model)
                 #else:

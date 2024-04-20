@@ -69,11 +69,13 @@ class FLServer:
             try:
                 model_data = conn.recv(40960)
                 if model_data:
+                    print("====handle_models====")
                     self.process_received_data(pickle.loads(model_data))
             except socket.error as e:
                 print(f"Error receiving data: {e}")
 
         if len(self.client_models) == self.num_clients:
+            print("====aggregate_models====")
             self.global_model = self.aggregate_models()
 
     def process_received_data(self, data_packet):  # conn
@@ -82,8 +84,32 @@ class FLServer:
         local_model = data_packet.get('model')
         with self.lock:
             # self.lock.acquire()
+            print("====process_received_data====")
             self.client_models[client_id] = local_model
 
+    # def aggregate_models(self):
+    #     # Initialize a dictionary to store the accumulated weights
+    #     total_weights = {}
+    #
+    #     # Initialize total_weights with zeros
+    #     for key, param in self.global_model.state_dict().items():
+    #         total_weights[key] = torch.zeros_like(param)
+    #
+    #     # Compute the total number of training samples from all clients
+    #     total_train_samples = sum(client_data['train_samples'] for client_data in self.client_data.values())
+    #
+    #     # Sum the weighted parameters of each client's model
+    #     for client_id, model in self.client_models.items():
+    #         client_samples = self.client_data[client_id]['train_samples']
+    #         user_weights = model.state_dict()
+    #         for key, param in user_weights.items():
+    #             weight = param * client_samples / total_train_samples
+    #             total_weights[key] += weight
+    #
+    #     # Load the aggregated weights into the global model
+    #     self.global_model.load_state_dict(total_weights)
+    #
+    #     return self.global_model
     def aggregate_models(self):
         # Initialize a dictionary to store the accumulated weights
         total_weights = {}
@@ -96,16 +122,14 @@ class FLServer:
         total_train_samples = sum(client_data['train_samples'] for client_data in self.client_data.values())
 
         # Sum the weighted parameters of each client's model
-        for client_id, model in self.client_models.items():
+        for client_id, user_weights in self.client_models.items():
             client_samples = self.client_data[client_id]['train_samples']
-            user_weights = model.state_dict()
             for key, param in user_weights.items():
                 weight = param * client_samples / total_train_samples
                 total_weights[key] += weight
 
         # Load the aggregated weights into the global model
         self.global_model.load_state_dict(total_weights)
-
         return self.global_model
 
     def broadcast_model(self):
