@@ -5,18 +5,21 @@ import threading
 import time
 import torch
 import sys
-
+import numpy as np
 from LinearRegression import LinearRegressionModel
 
 
 class FLServer:
-    def __init__(self, port_s, num_clients, subsample_s):
+    def __init__(self, port_s, num_clients, subsample_s, seed=False):
         self.server_socket = None
         self.s = None
         self.server_port = port_s  # the port number of server
         self.num_clients = num_clients  # we have 5 client
         self.subsample = subsample_s
-        self.global_model = LinearRegressionModel()  # actually we have to initial a model
+        if seed:
+            self.global_model = LinearRegressionModel(seed=True)  # actually we have to initial a model
+        elif not seed:
+            self.global_model = LinearRegressionModel()
         self.client_models = {}
         self.client_data = {}
         self.lock = threading.Lock()
@@ -133,14 +136,23 @@ class FLServer:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python COMP3221_FLServer.py <Port-Server> <Sub-Client>")
-        sys.exit(1)
 
-    port = int(sys.argv[1])
-    subsample = int(sys.argv[2])
+    if len(sys.argv) == 3:
+        port = int(sys.argv[1])
+        subsample = int(sys.argv[2])
+        # We should add a function to check the argument can be use
+        server = FLServer(port, num_clients=5, subsample_s=subsample)
+        server.start_server()
+        server.global_iteration()
+    elif len(sys.argv) != 3:
+        if len(sys.argv) == 4 and sys.argv[3] == 'demo':
+            port = int(sys.argv[1])
+            subsample = int(sys.argv[2])
+            # We should add a function to check the argument can be use
+            server = FLServer(port, num_clients=5, subsample_s=subsample, seed=True)
+            server.start_server()
+            server.global_iteration()
+        else:
+            print("Usage: python COMP3221_FLServer.py <Port-Server> <Sub-Client>")
+            sys.exit(1)
 
-    # We should add a function to check the argument can be use
-    server = FLServer(port, num_clients=5, subsample_s=subsample)
-    server.start_server()
-    server.global_iteration()

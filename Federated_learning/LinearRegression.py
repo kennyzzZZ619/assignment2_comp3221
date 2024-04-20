@@ -1,8 +1,10 @@
 import torch.nn as nn
-
+import torch
 
 class LinearRegressionModel(nn.Module):
-    def __init__(self, input_size=8):
+    def __init__(self, input_size=8, seed=False):
+        if seed:
+            torch.manual_seed(22)
         super(LinearRegressionModel, self).__init__()
         # Create a linear transformation to the incoming data
         self.linear = nn.Linear(input_size, 1)

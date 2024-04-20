@@ -4,7 +4,7 @@ import sys
 import os
 import time
 import matplotlib.pyplot as plt
-
+import numpy as np
 import pandas as pd
 import torch
 from torch import nn
@@ -32,12 +32,15 @@ def load_dataset(client_id):
 
 
 class FLClient:
-    def __init__(self, client_id, client_port, opt_method):
+    def __init__(self, client_id, client_port, opt_method, seed=False):
         self.connection = None
         self.client_id = client_id
         self.client_port = client_port
         self.opt_method = opt_method
-        self.model = LinearRegressionModel()
+        if seed:
+            self.model = LinearRegressionModel(seed=True)
+        elif not seed:
+            self.model = LinearRegressionModel()
         #self.model = None
         self.loss = nn.MSELoss()
         # self.model = copy.deepcopy(model)
@@ -196,16 +199,31 @@ class FLClient:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python COMP3221_FLClient.py <Client-id> <Port-Client> <Opt-Method>")
-        sys.exit(1)
+    #np.random.seed(0)
+    #torch.manual_seed(0)
 
-    client_id = str(sys.argv[1])
-    server_port = int(sys.argv[2])
-    opt_method = int(sys.argv[3])
+    if len(sys.argv) == 4:
+        client_id = str(sys.argv[1])
+        server_port = int(sys.argv[2])
+        opt_method = int(sys.argv[3])
 
-    client = FLClient(client_id, server_port, opt_method)
-    client.connect_to_server()
-    client.register_with_server()
-    client.maintain_connection()
-    client.close_connection()
+        client = FLClient(client_id, server_port, opt_method)
+        client.connect_to_server()
+        client.register_with_server()
+        client.maintain_connection()
+        client.close_connection()
+    elif len(sys.argv) != 4:
+        if len(sys.argv) == 5 and sys.argv[4] == 'demo':
+            client_id = str(sys.argv[1])
+            server_port = int(sys.argv[2])
+            opt_method = int(sys.argv[3])
+
+            client = FLClient(client_id, server_port, opt_method, seed=True)
+            client.connect_to_server()
+            client.register_with_server()
+            client.maintain_connection()
+            client.close_connection()
+        else:
+            print("Usage: python COMP3221_FLClient.py <Client-id> <Port-Client> <Opt-Method>")
+            sys.exit(1)
+
