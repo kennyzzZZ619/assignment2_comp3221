@@ -134,7 +134,11 @@ class FLServer:
 
     def broadcast_model(self):
         model_state_dict = self.global_model.state_dict()
-        print(type(model_state_dict))
+        for name, param in self.global_model.named_parameters():
+            print(f"Parameter name: {name}")
+            print(f"Shape: {param.size()}")
+            print(f"Type: {param.dtype}")
+            print("Values:\n", param.data)
         global_model_data = pickle.dumps(model_state_dict)
         for conn in self.connections:
             conn.sendall(global_model_data)

@@ -42,7 +42,7 @@ class FLClient:
         # self.model = copy.deepcopy(model)
         self.server_host = 'localhost'
         self.server_port = 6000
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.025)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.001)
         self.numeric_id = self.client_id.replace("client", "")
 
         self.X_train, self.y_train, self.X_test, self.y_test, self.train_samples, self.test_samples = load_dataset(
@@ -90,7 +90,6 @@ class FLClient:
                     break
 
                 global_model = pickle.loads(global_model_data)
-                print(type(global_model))
                 # for param_tensor in global_model.state_dict():
                 #     print(param_tensor, "\t", global_model.state_dict()[param_tensor])
                 #if isinstance(global_model, dict):
@@ -98,21 +97,36 @@ class FLClient:
                 #else:
                     #raise ValueError("Received data is not a state_dict.")
                 self.model.load_state_dict(global_model)
+                print("这是第一次训练之前数据")
+                for name, param in self.model.named_parameters():
+                    print(f"Parameter name: {name}")
+                    print(f"Shape: {param.size()}")
+                    print(f"Type: {param.dtype}")
+                    print("Values:\n", param.data)  # 打印参数值
+                print(f"Model in local is {self.model}")
                 print(f"I am client {self.client_id}")
                 print("Received new global model")
                 test_mse = self.evaluate_model()
                 print(f"Testing MSE: {test_mse}")
                 # Training the global model in local training
                 print("Local training...")
-                train_mse = self.train_model(20)
+                train_mse = self.train_model(50)
                 print(f"Training MSE: {train_mse}")
+                self.log_results(train_mse, test_mse)
                 # Logic to update and evaluate the model goes here (omitted for brevity)
                 updated_model_data = pickle.dumps({'client_id': self.numeric_id, 'model': self.model.state_dict()})
+                print("这是第一次训练之后的数据")
+                for name, param in self.model.named_parameters():
+                    print(f"Parameter name: {name}")
+                    print(f"Shape: {param.size()}")
+                    print(f"Type: {param.dtype}")
+                    print("Values:\n", param.data)
                 self.connection.sendall(updated_model_data)
                 print("Sending new local model")
 
         except Exception as e:
             print(f"Error during model receive/send: {e}")
+
 
     def evaluate_model(self):
         # ... Evaluate model，return test MSE ...
@@ -137,6 +151,7 @@ class FLClient:
                 output = self.model(X)
                 loss = self.loss(output, y)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
         return loss.data
 
