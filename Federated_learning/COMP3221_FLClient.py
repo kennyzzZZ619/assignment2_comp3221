@@ -2,6 +2,7 @@ import pickle
 import socket
 import sys
 import os
+import time
 
 import pandas as pd
 import torch
@@ -31,13 +32,18 @@ def load_dataset(client_id):
 
 class FLClient:
     def __init__(self, client_id, client_port, opt_method):
+        self.connection = None
         self.client_id = client_id
         self.client_port = client_port
         self.opt_method = opt_method
         self.model = LinearRegressionModel()
+        #self.model = None
         self.loss = nn.MSELoss()
         # self.model = copy.deepcopy(model)
+        self.server_host = 'localhost'
+        self.server_port = 6000
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.025)
+        self.numeric_id = self.client_id.replace("client", "")
 
         self.X_train, self.y_train, self.X_test, self.y_test, self.train_samples, self.test_samples = load_dataset(
             self.client_id)
@@ -57,111 +63,56 @@ class FLClient:
 
         self.train_loader = DataLoader(train_dataset, batch_size=batch_size)
         self.test_loader = DataLoader(test_dataset, batch_size=self.test_samples)
+    
+    def connect_to_server(self):
+        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connection.settimeout(10)
+        try:
+            self.connection.connect((self.server_host, self.server_port))
+            print(f"Connected to server at ({self.server_host}, {self.server_port})")
+        except (ConnectionRefusedError, socket.timeout) as e:
+            print(f"Connection failed: {e}")
+            sys.exit(1)
 
-    def register_from_server(self):
-        handshake_msg = {'data_size': len(self.X_train), 'client_id': self.client_id}
-        attempt = 0
-        while attempt < 4:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as Client_c:
-                    Client_c.settimeout(10)
-                    Client_c.connect(('localhost', 6000))
-                    Client_c.sendall(pickle.dumps(handshake_msg))
-                    break  # why???
-            except (ConnectionRefusedError, socket.timeout) as e:
-                attempt += 1
-                print(f"Attempt {attempt}: Connection failed, retrying...")
-                if attempt == 3:
-                    print(f"Connection failed after 3 attempts. error is:{e}")
-                    sys.exit(1)
+    def register_with_server(self):
+        handshake_msg = {'data_size': len(self.X_train), 'client_id': self.numeric_id}
+        self.connection.sendall(pickle.dumps(handshake_msg))
+        print("Handshake message sent to server.")
 
-    def bind_socket(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('localhost', self.client_port))
-            s.listen()
-            print("Listening for server")
-            conn, addr = s.accept()
-            return conn, addr
+    def maintain_connection(self):
+        try:
+            while True:  # This loop will continue until the server closes the connection or an error occurs
+                print("Waiting 20 seconds for model")
+                time.sleep(20)
+                global_model_data = self.connection.recv(4096)
+                if not global_model_data:
+                    print("No more data from server.")
+                    break
 
-    # def handle_model(self):
-    #     # receive the global model from server
-    #     # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    #     #     # s.connect(('localhost', 6000))
-    #     #     s.bind(('localhost', self.client_port))
-    #     #     s.listen()
-    #     #     print("Listening for server")
-    #     #     # while True:
-    #     #     conn, addr = s.accept()
-    #     conn, addr = self.bind_socket()
-    #     with conn:
-    #         while True:
-    #             print(f"Connected by {addr}")
-    #             global_model_data = conn.recv(40960)
-    #             global_model = pickle.loads(global_model_data)
-    #             if isinstance(global_model, dict):
-    #                 self.model.load_state_dict(global_model)
-    #             else:
-    #                 raise ValueError("Received data is not a state_dict.")
-    #             # self.model.load_state_dict(global_model)
-    #             print(f"I am client {self.client_id}")
-    #             print("Received new global model")
-    #             # Evaluate the global model using local test data
-    #             test_mse = self.evaluate_model()
-    #             print(f"Testing MSE: {test_mse}")
-    #             # Training the global model in local training
-    #             print("Local training...")
-    #             train_mse = self.train_model(20)
-    #             print(f"Training MSE: {train_mse}")
-    #             # Send the model to server
-    #             model_datapack = {
-    #                 'client_id': self.client_id,
-    #                 'model': self.model.state_dict()
-    #             }
-    #             updated_model_data = pickle.dumps(model_datapack)
-    #             conn.sendall(updated_model_data)
-    #             print("Sending new local model")
-    #             if not global_model_data:
-    #                 print("There is no data to receive.")
-    #                 break
-
-    def handle_model(self):
-        # receive the global model from server
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            # s.connect(('localhost', 6000))
-            s.bind(('localhost', self.client_port))
-            s.listen()
-            print("Listening for server")
-            #while True:
-            conn, addr = s.accept()
-            with conn:
-                print(f"Connected by {addr}")
-                global_model_data = conn.recv(4096)
                 global_model = pickle.loads(global_model_data)
-                if isinstance(global_model, dict):
-                    self.model.load_state_dict(global_model)
-                else:
-                    raise ValueError("Received data is not a state_dict.")
-                # self.model.load_state_dict(global_model)
+                print(type(global_model))
+                for param_tensor in global_model.state_dict():
+                    print(param_tensor, "\t", global_model.state_dict()[param_tensor])
+                #if isinstance(global_model, dict):
+                    #self.model.load_state_dict(global_model)
+                #else:
+                    #raise ValueError("Received data is not a state_dict.")
+                self.model.load_state_dict(global_model)
                 print(f"I am client {self.client_id}")
                 print("Received new global model")
-                # Evaluate the global model using local test data
                 test_mse = self.evaluate_model()
                 print(f"Testing MSE: {test_mse}")
                 # Training the global model in local training
                 print("Local training...")
                 train_mse = self.train_model(20)
                 print(f"Training MSE: {train_mse}")
-                # Send the model to server
-                model_datapack = {
-                    'client_id': self.client_id,
-                    'model': self.model.state_dict()
-                }
-                updated_model_data = pickle.dumps(model_datapack)
-                conn.sendall(updated_model_data)
+                # Logic to update and evaluate the model goes here (omitted for brevity)
+                updated_model_data = pickle.dumps({'client_id': self.numeric_id, 'model': self.model.state_dict()})
+                self.connection.sendall(updated_model_data)
                 print("Sending new local model")
-                if not global_model_data:
-                    print("There is no data to receive.")
 
+        except Exception as e:
+            print(f"Error during model receive/send: {e}")
 
     def evaluate_model(self):
         # ... Evaluate model，return test MSE ...
@@ -189,6 +140,11 @@ class FLClient:
                 self.optimizer.step()
         return loss.data
 
+    def close_connection(self):
+        if self.connection:
+            self.connection.close()
+            print("Connection closed.")
+
     def log_results(self, train_mse, test_mse):
         # The log to record all the MSE detail
         with open(f"{self.client_id}_log.txt", "a") as log_file:
@@ -205,8 +161,7 @@ if __name__ == "__main__":
     opt_method = int(sys.argv[3])
 
     client = FLClient(client_id, server_port, opt_method)
-    client.register_from_server()
-    while True:
-        client.handle_model()
-
-
+    client.connect_to_server()
+    client.register_with_server()
+    client.maintain_connection()
+    client.close_connection()

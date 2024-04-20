@@ -10,6 +10,7 @@ from LinearRegression import LinearRegressionModel
 
 class FLServer:
     def __init__(self, port_s, num_clients, subsample_s):
+        self.server_socket = None
         self.s = None
         self.server_port = port_s  # the port number of server
         self.num_clients = num_clients  # we have 5 client
@@ -20,54 +21,38 @@ class FLServer:
         self.lock = threading.Lock()
         self.wait_time = 30
         self.global_round = 10
+        self.connections = []
 
     def start_server(self):
-        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', self.server_port))
-        self.s.listen(self.num_clients)
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.bind(('localhost', self.server_port))
+        self.server_socket.listen(self.num_clients)
         print(f"Server started on port {self.server_port}. Waiting for clients...")
-        # start global communication
+        self.accept_clients()
+        print("Broadcast the initial model to client...")
+        self.broadcast_model()
+
+    def global_iteration(self):
         for t in range(self.global_round):
             print(f"Global Iteration {t + 1}:")
-            # for param_tensor in self.global_model.state_dict():
-            #     print(param_tensor, "\t", self.global_model.state_dict()[param_tensor])
-            # try to do the model fitting and so on
-            self.accept_clients(t)
-            time.sleep(10)
-            if t == 0:
-                self.broadcast_model()
-            # else:
-            #     self.aggregate_models()
-        # send the ending message
-        # self.broadcast_finish_message()
-        self.s.close()
+            self.handle_models()
+            self.broadcast_model()
 
-    def accept_clients(self, t):
+    def accept_clients(self):
         start_time = time.time()
-        connected_clients = 0  # track the number of connections
-        print(f"Total Number of clients: {self.num_clients}")
-        while connected_clients < self.num_clients:
-            # Accept a new connection
-            conn, addr = self.s.accept()
-            print(f"Getting local model from client {connected_clients + 1}")
+        while len(self.connections) < self.num_clients:
+            conn, addr = self.server_socket.accept()
+            print(f"Connected to client at {addr}")
+            self.connections.append(conn)
+            if len(self.connections) == 1:
+                time_remaining = self.wait_time - (time.time() - start_time)
+                if time_remaining > 0:
+                    print(f"Waiting for additional clients to connect for {time_remaining} seconds.")
+                    time.sleep(time_remaining)
+            threading.Thread(target=self.handle_handshake, args=(conn,)).start()
 
-            # Increment the counter for connected clients
-            connected_clients += 1
-
-            # Start a new thread to handle the client
-            client_thread = threading.Thread(target=self.handle_handshake, args=(conn, t))  # addr
-            client_thread.start()
-
-            # Check if the initial wait time has passed
-            if t == 0:
-                if connected_clients == 1:
-                    time_remaining = self.wait_time - (time.time() - start_time)
-                    if time_remaining > 0:
-                        print(f"Waiting for additional clients to connect for {time_remaining} seconds.")
-                        time.sleep(time_remaining)
-
-    def handle_handshake(self, conn, t):  # addr
-        if t == 0:
+    def handle_handshake(self, conn):
+        try:
             handshake_data = conn.recv(40960)
             if handshake_data:
                 handshake_msg = pickle.loads(handshake_data)
@@ -75,29 +60,29 @@ class FLServer:
                 data_size = handshake_msg.get('data_size')
                 print(f"Handshake received from {client_id} with data size {data_size}.")
                 self.client_data[client_id] = {'train_samples': data_size}
-        else:
-            global_model_data = conn.recv(40960)
-            if global_model_data:
-                global_model = pickle.loads(global_model_data)
-                self.process_received_data(global_model)
+        except Exception as e:
+            print(f"Failed to receive or process handshake data: {e}")
+
+    def handle_models(self):
+        self.client_models.clear()
+        for conn in self.connections:
+            try:
+                model_data = conn.recv(40960)
+                if model_data:
+                    self.process_received_data(pickle.loads(model_data))
+            except socket.error as e:
+                print(f"Error receiving data: {e}")
+
+        if len(self.client_models) == self.num_clients:
+            self.global_model = self.aggregate_models()
 
     def process_received_data(self, data_packet):  # conn
         # decode the data pack, 'local_model' is form client model
-        # client_id, local_model = data_packet['client_id'], data_packet['model']
         client_id = data_packet.get('client_id')
         local_model = data_packet.get('model')
-        # local_model = data_packet['model']
         with self.lock:
             # self.lock.acquire()
-            # refresh the model from client
             self.client_models[client_id] = local_model
-            # self.lock.release()
-            # when all the client was sent models
-        if len(self.client_models) == self.num_clients:
-            # Aggregate the model
-            self.global_model = self.aggregate_models()
-            # broadcast the model back to client
-            self.broadcast_model()
 
     def aggregate_models(self):
         # Initialize a dictionary to store the accumulated weights
@@ -124,16 +109,11 @@ class FLServer:
         return self.global_model
 
     def broadcast_model(self):
-        print("Broadcasting new global model")
-        send_model = pickle.dumps(self.global_model.state_dict())
-        for client_port in range(6001, 6006, 1):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as SERVER:
-                try:
-                    SERVER.connect(('localhost', client_port))
-                    SERVER.sendall(send_model)
-                except Exception as e:
-                    print(f"Can not connect to the client {client_port}, error is {e}")
-        print("sender stop")
+        model_state_dict = self.global_model.state_dict()
+        print(type(model_state_dict))
+        global_model_data = pickle.dumps(model_state_dict)
+        for conn in self.connections:
+            conn.sendall(global_model_data)
 
 
 if __name__ == "__main__":
@@ -147,3 +127,4 @@ if __name__ == "__main__":
     # We should add a function to check the argument can be use
     server = FLServer(port, num_clients=5, subsample_s=subsample)
     server.start_server()
+    server.global_iteration()
