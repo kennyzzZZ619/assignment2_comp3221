@@ -1,0 +1,30 @@
+Coding environment:
+Python 3.9.5
+
+Version of packages used:
+matplotlib 3.8.4
+numpy 1.26.0
+os
+pandas 2.2.2
+pickle
+socket
+sys
+threading
+time
+pytorch 2.2.2
+
+Instructions to run the program:
+
+1.Open six terminals in the Federated Learning directory
+2.On the first terminal, enter the following command:
+	 python3 COMP3221_FLServer.py 6000 <Sub-Client>
+		Where <Sub-client> ranges from 0 to 5. 0 disables subsampling while A value of 1 to 5 enables 		subsampling.
+3.On each of the 5 remaining terminals, enter the following commands
+	python3 COMP3221_FLClient.py <Client-id> <Port-CLient> <Opt-Method>
+		Where <Client-id> is one of client1 to client5. <Port-Client> is in 6001 to 6005 which 			corresponds to client1 to client5. <Opt-Method> is either 0 for Gradient Descent or 1 for Mini-
+		Batch Gradient Descent with batch size of 64.
+		
+Commands to reproduce the experimental results:
+	Add an extra 'demo' argument to the end of run command of clients and server.
+	python3 COMP3221_FLServer.py 6000 <Sub-Client> demo
+	python3 COMP3221_FLCLient.py <Client-id> <Port-Client> <Opt-Method> demo
